@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KiranaCredit - Real-time Ledger</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide-react@0.378.0/dist/lucide-react.js"></script>
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
+
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .page { display: none; }
+        .page.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        .modal-backdrop { background-color: rgba(0,0,0,0.5); transition: opacity 0.3s ease; }
+        .modal-content { transition: transform 0.3s ease, opacity 0.3s ease; }
+        .loading-spinner { border-top-color: #4f46e5; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .nav-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div id="app-container" class="max-w-md mx-auto bg-white shadow-2xl min-h-screen">
+
+        <!-- Initial Loading Screen -->
+        <div id="loading-screen" class="fixed inset-0 flex flex-col justify-center items-center bg-white z-50">
+            <div class="w-16 h-16 border-4 border-gray-200 rounded-full loading-spinner"></div>
+            <p class="mt-4 font-semibold text-lg text-gray-600">KiranaCredit</p>
+        </div>
+
+        <!-- ===================================================================== -->
+        <!-- == ONBOARDING / LOGIN                                              == -->
+        <!-- ===================================================================== -->
+        <div id="onboarding-page" class="page p-8 min-h-screen flex flex-col justify-center">
+            <!-- Onboarding content will be injected here -->
+        </div>
+
+        <!-- ===================================================================== -->
+        <!-- == SHOPKEEPER SECTION                                              == -->
+        <!-- ===================================================================== -->
+        <div id="shopkeeper-main-page" class="page">
+            <main id="shopkeeper-content" class="pb-20">
+                <!-- Shopkeeper content (Dashboard, Analytics) will be injected here -->
+            </main>
+            <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 flex justify-around">
+                <button data-target="shopkeeper-dashboard" class="nav-btn flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    <span class="text-xs">Dashboard</span>
+                </button>
+                <button data-target="shopkeeper-analytics" class="nav-btn flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                    <span class="text-xs">Analytics</span>
+                </button>
+                <button id="logout-btn" class="flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                    <span class="text-xs">Logout</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- ===================================================================== -->
+        <!-- == CUSTOMER SECTION                                                == -->
+        <!-- ===================================================================== -->
+        <div id="customer-main-page" class="page">
+            <main id="customer-content" class="pb-20">
+                 <!-- Customer content will be injected here -->
+            </main>
+             <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 flex justify-around">
+                <button data-target="customer-dashboard" class="nav-btn flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M2 7.27V21a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V7.27a1 1 0 0 0-.24-.65l-8.77-6.02a1 1 0 0 0-1.52 0L2.24 6.62A1 1 0 0 0 2 7.27Z"/><path d="M16 21v-5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v5"/></svg>
+                    <span class="text-xs">My Shops</span>
+                </button>
+                 <button id="customer-logout-btn" class="flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                    <span class="text-xs">Logout</span>
+                </button>
+            </nav>
+        </div>
+        
+        <!-- ===================================================================== -->
+        <!-- == GENERIC DETAIL PAGE (for ledgers)                               == -->
+        <!-- ===================================================================== -->
+        <div id="detail-page" class="page">
+            <!-- Ledger details for both roles will be injected here -->
+        </div>
+
+    </div>
+
+    <!-- Universal Modal Container -->
+    <div id="modal-container" class="fixed inset-0 z-40"></div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 p-4 rounded-lg shadow-lg text-white font-semibold opacity-0 transition-opacity duration-300 z-50"></div>
+
+    <!-- ===================================================================== -->
+    <!-- == FIREBASE & JAVASCRIPT LOGIC                                     == -->
+    <!-- ===================================================================== -->
+    <script type="module">
+        // IMPORTANT: Replace this with your own Firebase configuration
+        // from the setup_guide.md file.
+        const firebaseConfig = {
+  apiKey: "AIzaSyBntL44hTWPxWbTLuQJrhx9uvLinIGnT3I",
+  authDomain: "kirana-app-32b71.firebaseapp.com",
+  projectId: "kirana-app-32b71",
+  storageBucket: "kirana-app-32b71.firebasestorage.app",
+  messagingSenderId: "915200549911",
+  appId: "1:915200549911:web:4b8b84e9e37c67acf22852"
+};
+
+        // Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { 
+            getAuth, 
+            onAuthStateChanged, 
+            signInAnonymously, 
+            signOut 
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            getDoc, 
+            collection, 
+            query, 
+            onSnapshot,
+            addDoc,
+            serverTimestamp,
+            orderBy
+        } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        dayjs.extend(dayjs_plugin_relativeTime);
+
+        // --- App State ---
+        let currentUser = null;
+        let userData = null;
+        let unsubscribeListeners = [];
+
+        // --- Utility Functions ---
+        const $ = (selector) => document.querySelector(selector);
+        const showPage = (pageId) => {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            $(`#${pageId}`).classList.add('active');
+        };
+        const showToast = (message, type = 'success') => { /* ... implementation ... */ };
+        const formatCurrency = (amount) => `₹${Number(amount || 0).toFixed(2)}`;
+        const formatDate = (timestamp) => timestamp ? dayjs(timestamp.toDate()).format('D MMM YYYY, h:mm A') : '...';
+
+        // --- App Initialization ---
+        const init = () => {
+            $('#loading-screen').style.display = 'none';
+            onAuthStateChanged(auth, async (user) => {
+                // Clean up old listeners
+                unsubscribeListeners.forEach(unsub => unsub());
+                unsubscribeListeners = [];
+
+                if (user) {
+                    currentUser = user;
+                    const userDoc = await getDoc(doc(db, "users", user.uid));
+                    if (userDoc.exists()) {
+                        userData = userDoc.data();
+                        if (userData.role === 'shopkeeper') {
+                            renderShopkeeperShell();
+                        } else {
+                            renderCustomerShell();
+                        }
+                    } else {
+                        // New user, show role selection
+                        renderOnboarding();
+                    }
+                } else {
+                    currentUser = null;
+                    userData = null;
+                    renderOnboarding();
+                }
+            });
+        };
+
+        // --- Onboarding & Authentication ---
+        const renderOnboarding = () => {
+            $('#onboarding-page').innerHTML = `
+                <!-- HTML for role selection -->
+            `;
+            showPage('onboarding-page');
+            
+            $('#select-shopkeeper-btn')?.addEventListener('click', () => renderRegistrationForm('shopkeeper'));
+            $('#select-customer-btn')?.addEventListener('click', () => renderRegistrationForm('customer'));
+        };
+
+        const renderRegistrationForm = (role) => {
+            // HTML for registration form
+            $('#onboarding-page').innerHTML = `<!-- ... form ... -->`;
+            // Add form submission listener
+        };
+        
+        // --- Shopkeeper UI & Logic ---
+        const renderShopkeeperShell = () => {
+            showPage('shopkeeper-main-page');
+            handleShopkeeperNav('shopkeeper-dashboard');
+            
+            document.querySelectorAll('#shopkeeper-main-page .nav-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const target = e.currentTarget.dataset.target;
+                    if(target) handleShopkeeperNav(target);
+                });
+            });
+            $('#logout-btn').addEventListener('click', () => signOut(auth));
+        };
+        
+        const handleShopkeeperNav = (target) => {
+             document.querySelectorAll('#shopkeeper-main-page .nav-btn').forEach(b => b.classList.remove('active'));
+             $(`button[data-target='${target}']`).classList.add('active');
+             if(target === 'shopkeeper-dashboard') renderShopkeeperDashboard();
+             if(target === 'shopkeeper-analytics') renderShopkeeperAnalytics();
+        };
+
+        const renderShopkeeperDashboard = () => {
+            // Fetch and render dashboard with real-time customer list
+        };
+
+        const renderShopkeeperAnalytics = () => {
+            // Fetch data and render charts
+        };
+
+        // --- Customer UI & Logic ---
+        const renderCustomerShell = () => {
+            showPage('customer-main-page');
+            handleCustomerNav('customer-dashboard');
+            // Add nav listeners
+        };
+        
+        const handleCustomerNav = (target) => {
+            // Handle navigation for customer
+        };
+        
+        const renderCustomerDashboard = () => {
+            // Fetch and render list of shops
+        };
+        
+        // --- Detail Page Logic ---
+        const renderLedgerDetail = (context, id) => {
+            // Render detailed transaction list for a customer (shopkeeper view)
+            // or a shop (customer view)
+        };
+        
+        // --- Start the App ---
+        init();
+
+    </script>
+</body>
+</html>
+
+
