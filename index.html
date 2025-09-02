@@ -1,310 +1,610 @@
-<script type="module">
-    // IMPORTANT: Make sure your Firebase configuration is correct here.
-    const firebaseConfig = {
-        apiKey: "AIzaSyBntL44hTWPxWbTLuQJrhx9uvLinIGnT3I",
-        authDomain: "kirana-app-32b71.firebaseapp.com",
-        projectId: "kirana-app-32b71",
-        storageBucket: "kirana-app-32b71.firebasestorage.app",
-        messagingSenderId: "915200549911",
-        appId: "1:915200549911:web:4b8b84e9e37c67acf22852"
-    };
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KiranaCredit - Real-time Ledger</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    // Firebase SDKs
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, serverTimestamp, orderBy, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    <!-- Chart.js for Analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .page { display: none; }
+        .page.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+        .modal-backdrop { background-color: rgba(0,0,0,0.5); transition: opacity 0.3s ease; }
+        .modal-content { transition: transform 0.3s ease, opacity 0.3s ease; }
+        .loading-spinner { border-top-color: #4f46e5; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .nav-btn.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #888; border-radius: 2px; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
 
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    dayjs.extend(dayjs_plugin_relativeTime);
+    <div id="app-container" class="max-w-md mx-auto bg-white shadow-2xl min-h-screen">
 
-    // --- App State ---
-    let currentUser = null;
-    let userData = null;
-    let unsubscribeListeners = [];
-    let myChart = null;
+        <!-- Initial Loading Screen -->
+        <div id="loading-screen" class="fixed inset-0 flex flex-col justify-center items-center bg-white z-50">
+            <div class="w-16 h-16 border-4 border-gray-200 rounded-full loading-spinner"></div>
+            <p class="mt-4 font-semibold text-lg text-gray-600">KiranaCredit</p>
+        </div>
 
-    // --- Utility Functions ---
-    const $ = (selector) => document.querySelector(selector);
-    const $$ = (selector) => document.querySelectorAll(selector);
-    const showPage = (pageId) => {
-        $$('.page').forEach(p => p.classList.remove('active'));
-        $(`#${pageId}`).classList.add('active');
-    };
-    const showToast = (message, type = 'success') => {
-        const toast = $('#toast');
-        toast.textContent = message;
-        toast.className = `fixed bottom-24 left-1/2 -translate-x-1/2 p-4 rounded-lg shadow-lg text-white font-semibold z-50 transition-opacity duration-300 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
-        toast.style.opacity = 1;
-        setTimeout(() => {
-            toast.style.opacity = 0;
-        }, 3000);
-    };
-    const formatCurrency = (amount) => `₹${Number(amount || 0).toFixed(2)}`;
-    const formatDate = (timestamp) => timestamp ? dayjs(timestamp.toDate()).format('D MMM YYYY, h:mm A') : '...';
-    const timeAgo = (timestamp) => timestamp ? dayjs(timestamp.toDate()).fromNow() : '...';
+        <!-- ONBOARDING / LOGIN -->
+        <div id="onboarding-page" class="page p-8 min-h-screen flex flex-col justify-center"></div>
 
-    const showModal = (html) => {
-        $('#modal-container').innerHTML = html;
-        const modalBackdrop = $('#modal-container').querySelector('.modal-backdrop');
-        const modalContent = $('#modal-container').querySelector('.modal-content');
-        setTimeout(() => {
-            if(modalBackdrop) modalBackdrop.style.opacity = 1;
-            if(modalContent) {
-                modalContent.style.opacity = 1;
-                modalContent.style.transform = 'translateY(0)';
-            }
-        }, 10);
-    };
+        <!-- SHOPKEEPER SECTION -->
+        <div id="shopkeeper-main-page" class="page">
+            <main id="shopkeeper-content" class="pb-20"></main>
+            <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 flex justify-around">
+                <button data-target="shopkeeper-dashboard" class="nav-btn flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    <span class="text-xs">Dashboard</span>
+                </button>
+                <button data-target="shopkeeper-analytics" class="nav-btn flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                    <span class="text-xs">Analytics</span>
+                </button>
+                <button id="logout-btn" class="flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                    <span class="text-xs">Logout</span>
+                </button>
+            </nav>
+        </div>
 
-    const hideModal = () => {
-        const modalBackdrop = $('#modal-container').querySelector('.modal-backdrop');
-        const modalContent = $('#modal-container').querySelector('.modal-content');
-        if(modalBackdrop) modalBackdrop.style.opacity = 0;
-        if(modalContent) {
-            modalContent.style.opacity = 0;
-            modalContent.style.transform = 'translateY(20px)';
-        }
-        setTimeout(() => {
-            $('#modal-container').innerHTML = '';
-        }, 300);
-    };
+        <!-- CUSTOMER SECTION -->
+        <div id="customer-main-page" class="page">
+            <main id="customer-content" class="pb-20"></main>
+             <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t border-gray-200 flex justify-around">
+                <button data-target="customer-dashboard" class="nav-btn flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M2 7.27V21a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V7.27a1 1 0 0 0-.24-.65l-8.77-6.02a1 1 0 0 0-1.52 0L2.24 6.62A1 1 0 0 0 2 7.27Z"/><path d="M16 21v-5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v5"/></svg>
+                    <span class="text-xs">My Shops</span>
+                </button>
+                 <button id="customer-logout-btn" class="flex-1 p-3 text-center text-gray-600 border-b-2 border-transparent">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+                    <span class="text-xs">Logout</span>
+                </button>
+            </nav>
+        </div>
+        
+        <!-- GENERIC DETAIL PAGE (for ledgers) -->
+        <div id="detail-page" class="page"></div>
+    </div>
 
+    <!-- Universal Modal Container -->
+    <div id="modal-container" class="fixed inset-0 z-40"></div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 p-4 rounded-lg shadow-lg text-white font-semibold opacity-0 transition-opacity duration-300 z-50"></div>
 
-    // --- App Initialization ---
-    const init = () => {
-        $('#loading-screen').style.display = 'flex';
-        onAuthStateChanged(auth, async (user) => {
-            unsubscribeListeners.forEach(unsub => unsub());
-            unsubscribeListeners = [];
+    <script type="module">
+        // =====================================================================
+        // == YOUR FIREBASE CONFIGURATION OBJECT                              ==
+        // =====================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBntL44hTWPxWbTLuQJrhx9uvLinIGnT3I",
+            authDomain: "kirana-app-32b71.firebaseapp.com",
+            projectId: "kirana-app-32b71",
+            storageBucket: "kirana-app-32b71.firebasestorage.app",
+            messagingSenderId: "915200549911",
+            appId: "1:915200549911:web:4b8b84e9e37c67acf22852"
+        };
 
-            if (user) {
-                currentUser = user;
-                const userDocRef = doc(db, "users", user.uid);
-                const userDoc = await getDoc(userDocRef);
+        // =====================================================================
+        // == DO NOT EDIT BELOW THIS LINE                                     ==
+        // =====================================================================
 
-                if (userDoc.exists()) {
-                    userData = userDoc.data();
-                    if (userData.role === 'shopkeeper') {
-                        renderShopkeeperShell();
+        // Firebase SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, serverTimestamp, orderBy, where, updateDoc, getDocs, writeBatch, increment } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        dayjs.extend(dayjs_plugin_relativeTime);
+
+        let currentUser = null;
+        let userData = null;
+        let unsubscribeListeners = [];
+        let myChart = null;
+
+        const $ = (selector) => document.querySelector(selector);
+        const $$ = (selector) => document.querySelectorAll(selector);
+        const showPage = (pageId) => {
+            $$('.page').forEach(p => p.classList.remove('active'));
+            $(`#${pageId}`).classList.add('active');
+        };
+        const showToast = (message, type = 'success') => {
+            const toast = $('#toast');
+            toast.textContent = message;
+            toast.className = `fixed bottom-24 left-1/2 -translate-x-1/2 p-4 rounded-lg shadow-lg text-white font-semibold z-50 transition-opacity duration-300 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
+            toast.style.opacity = 1;
+            setTimeout(() => { toast.style.opacity = 0; }, 3000);
+        };
+        const formatCurrency = (amount) => `₹${Number(amount || 0).toFixed(2)}`;
+        const formatDate = (timestamp) => timestamp ? dayjs(timestamp.toDate()).format('D MMM YYYY, h:mm A') : '...';
+        const timeAgo = (timestamp) => timestamp ? dayjs(timestamp.toDate()).fromNow() : '...';
+        
+        const showModal = (html) => {
+            $('#modal-container').innerHTML = html;
+            const backdrop = $('#modal-container').querySelector('.modal-backdrop');
+            const content = $('#modal-container').querySelector('.modal-content');
+            setTimeout(() => {
+                if (backdrop) backdrop.style.opacity = 1;
+                if (content) { content.style.opacity = 1; content.style.transform = 'translateY(0)'; }
+            }, 10);
+        };
+        const hideModal = () => {
+            const backdrop = $('#modal-container').querySelector('.modal-backdrop');
+            const content = $('#modal-container').querySelector('.modal-content');
+            if (backdrop) backdrop.style.opacity = 0;
+            if (content) { content.style.opacity = 0; content.style.transform = 'translateY(20px)'; }
+            setTimeout(() => { $('#modal-container').innerHTML = ''; }, 300);
+        };
+
+        const init = () => {
+            $('#loading-screen').style.display = 'flex';
+            onAuthStateChanged(auth, async (user) => {
+                unsubscribeListeners.forEach(unsub => unsub());
+                unsubscribeListeners = [];
+                if (user) {
+                    currentUser = user;
+                    const userDoc = await getDoc(doc(db, "users", user.uid));
+                    if (userDoc.exists()) {
+                        userData = userDoc.data();
+                        if (userData.role === 'shopkeeper') renderShopkeeperShell();
+                        else renderCustomerShell();
                     } else {
-                        renderCustomerShell();
+                        renderOnboarding();
                     }
                 } else {
-                    renderOnboarding();
+                    currentUser = null;
+                    userData = null;
+                    await signInAnonymously(auth).catch(err => console.error("Anonymous sign-in failed:", err));
                 }
-            } else {
-                currentUser = null;
-                userData = null;
-                await signInAnonymously(auth).catch(err => console.error("Anonymous sign-in failed:", err));
-                renderOnboarding();
-            }
-            $('#loading-screen').style.display = 'none';
-        });
-
-        // Global modal close listener
-        document.addEventListener('click', (e) => {
-            if (e.target.matches('.modal-close-btn')) {
-                hideModal();
-            }
-        });
-    };
-
-    // --- Onboarding & Authentication ---
-    const renderOnboarding = () => {
-        $('#onboarding-page').innerHTML = `
-            <div class="text-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-indigo-600 mb-4"><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M15 2v20"/><path d="M15 7h5"/><path d="M15 12h5"/><path d="M15 17h5"/></svg>
-                <h1 class="text-3xl font-bold text-gray-800">Welcome to KiranaCredit</h1>
-                <p class="text-gray-600 mt-2 mb-8">The smart ledger for India's MSMEs.</p>
-            </div>
-            <div class="w-full">
-                <h2 class="text-lg font-semibold text-center mb-4">Choose your role to begin:</h2>
-                <div class="space-y-4">
-                    <button id="select-shopkeeper-btn" class="w-full text-left flex items-center gap-4 p-4 border border-gray-300 rounded-lg hover:bg-indigo-50 hover:border-indigo-500 transition-all">
-                        <div class="p-3 bg-indigo-100 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-store text-indigo-600"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M12 7v3a1 1 0 0 1-1 1H0"/></svg></div>
-                        <div><p class="font-bold text-lg">I am a Shopkeeper</p><p class="text-sm text-gray-500">Manage your customer ledgers.</p></div>
-                    </button>
-                    <button id="select-customer-btn" class="w-full text-left flex items-center gap-4 p-4 border border-gray-300 rounded-lg hover:bg-green-50 hover:border-green-500 transition-all">
-                        <div class="p-3 bg-green-100 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user text-green-600"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-                        <div><p class="font-bold text-lg">I am a Customer</p><p class="text-sm text-gray-500">Add credit to your local shop.</p></div>
-                    </button>
-                </div>
-            </div>`;
-        showPage('onboarding-page');
-        $('#select-shopkeeper-btn')?.addEventListener('click', () => renderRegistrationForm('shopkeeper'));
-        $('#select-customer-btn')?.addEventListener('click', () => renderRegistrationForm('customer'));
-    };
-
-    const renderRegistrationForm = (role) => {
-        const isShopkeeper = role === 'shopkeeper';
-        $('#onboarding-page').innerHTML = `
-            <div class="w-full">
-                <button id="back-to-onboarding" class="mb-6 text-indigo-600 font-semibold flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-                    Back
-                </button>
-                <h2 class="text-2xl font-bold mb-2">${isShopkeeper ? 'Shopkeeper Registration' : 'Customer Registration'}</h2>
-                <p class="text-gray-600 mb-8">${isShopkeeper ? 'Create your shop profile to start.' : 'Create your profile to manage credit.'}</p>
-                <form id="registration-form">
-                    <div class="mb-4">
-                        <label for="reg-name" class="block text-sm font-medium text-gray-700 mb-1">Your Full Name ${isShopkeeper ? ' (or Shop Name)' : ''}</label>
-                        <input type="text" id="reg-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    </div>
-                    <div class="mb-6">
-                        <label for="reg-phone" class="block text-sm font-medium text-gray-700 mb-1">Your 10-digit Phone Number</label>
-                        <input type="tel" id="reg-phone" required pattern="\\d{10}" title="Please enter a 10-digit phone number" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <p class="text-xs text-gray-500 mt-1">This will be your unique ID.</p>
-                    </div>
-                    <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-indigo-700 transition-transform transform hover:scale-105">Complete Registration</button>
-                </form>
-            </div>
-        `;
-        $('#back-to-onboarding').addEventListener('click', renderOnboarding);
-        $('#registration-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const name = $('#reg-name').value.trim();
-            const phone = $('#reg-phone').value.trim();
-            const userRef = doc(db, "users", currentUser.uid);
-            await setDoc(userRef, { name, phone, role, createdAt: serverTimestamp() });
-            userData = { name, phone, role }; // Manually update state to prevent re-fetch
-            if (role === 'shopkeeper') renderShopkeeperShell();
-            else renderCustomerShell();
-        });
-    };
-
-    // --- Shopkeeper Logic ---
-    const renderShopkeeperShell = () => {
-        showPage('shopkeeper-main-page');
-        handleShopkeeperNav('shopkeeper-dashboard');
-        $$('#shopkeeper-main-page .nav-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const target = e.currentTarget.dataset.target;
-                if(target) handleShopkeeperNav(target);
+                $('#loading-screen').style.display = 'none';
             });
-        });
-        $('#logout-btn').addEventListener('click', () => signOut(auth));
-    };
-
-    const handleShopkeeperNav = (target) => {
-        $$('#shopkeeper-main-page .nav-btn').forEach(b => b.classList.remove('active'));
-        $(`button[data-target='${target}']`).classList.add('active');
-        if(target === 'shopkeeper-dashboard') renderShopkeeperDashboard();
-        if(target === 'shopkeeper-analytics') renderShopkeeperAnalytics();
-    };
-
-    const renderShopkeeperDashboard = () => {
-        $('#shopkeeper-content').innerHTML = `
-            <header class="bg-indigo-600 text-white p-4 sticky top-0 z-10 shadow-md">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <h1 class="text-xl font-bold">${userData.name}</h1>
-                        <p class="text-sm text-indigo-200">Shopkeeper Dashboard</p>
-                    </div>
-                    <button id="show-qr-btn" class="p-2 rounded-full bg-indigo-500 hover:bg-indigo-400 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h.01"/><path d="M21 12h.01"/><path d="M12 21h.01"/></svg>
-                    </button>
-                </div>
-            </header>
-            <div class="p-4 bg-gray-100">
-                <div id="summary-cards" class="grid grid-cols-2 gap-4 mb-4"></div>
-                <input type="text" id="search-bar" placeholder="Search customer..." class="w-full px-4 py-2 border rounded-lg mb-4">
-                <div id="customer-list" class="space-y-3"></div>
-            </div>`;
-
-        $('#show-qr-btn').addEventListener('click', () => {
-            const shopId = userData.phone;
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent('kiranacredit:shopid=' + shopId)}`;
-            showModal(`...QR code modal HTML...`);
-        });
-
-        const q = query(collection(db, `users/${currentUser.uid}/customers`), orderBy("lastActivity", "desc"));
-        const unsub = onSnapshot(q, (snapshot) => {
-            let customers = [];
-            snapshot.forEach(doc => customers.push({ id: doc.id, ...doc.data() }));
-            
-            // Render summary cards
-            const totalDue = customers.reduce((sum, c) => sum + c.totalDue, 0);
-            $('#summary-cards').innerHTML = `
-                <div class="bg-white p-4 rounded-lg shadow"><p class="text-sm text-gray-500">Total Outstanding</p><p class="text-2xl font-bold text-red-600">${formatCurrency(totalDue)}</p></div>
-                <div class="bg-white p-4 rounded-lg shadow"><p class="text-sm text-gray-500">Active Customers</p><p class="text-2xl font-bold">${customers.length}</p></div>
-            `;
-            
-            // Render customer list
-            const listEl = $('#customer-list');
-            if (customers.length === 0) {
-                listEl.innerHTML = `<div class="text-center py-10 text-gray-500"><p>No customers yet.</p><p class="text-sm">Share your QR code to get started.</p></div>`;
-                return;
-            }
-            listEl.innerHTML = customers.map(c => `
-                <div class="customer-card flex items-center justify-between p-4 bg-white rounded-lg shadow-sm hover:shadow-md cursor-pointer" data-id="${c.id}" data-name="${c.name}">
-                    <div><p class="font-bold">${c.name}</p><p class="text-sm text-gray-500">Last active: ${timeAgo(c.lastActivity)}</p></div>
-                    <div><p class="font-bold text-lg text-right ${c.totalDue > 0 ? 'text-red-600' : 'text-green-600'}">${formatCurrency(c.totalDue)}</p></div>
-                </div>
-            `).join('');
-
-            $$('.customer-card').forEach(card => card.addEventListener('click', (e) => {
-                renderLedgerDetail('shopkeeper', e.currentTarget.dataset.id, e.currentTarget.dataset.name);
-            }));
-        });
-        unsubscribeListeners.push(unsub);
-    };
-
-    // --- Customer Logic ---
-    const renderCustomerShell = () => {
-        showPage('customer-main-page');
-        handleCustomerNav('customer-dashboard');
-        $$('#customer-main-page .nav-btn').forEach(btn => {
-             btn.addEventListener('click', (e) => {
-                const target = e.currentTarget.dataset.target;
-                if(target) handleCustomerNav(target);
+            document.addEventListener('click', (e) => {
+                if (e.target.matches('.modal-close-btn')) hideModal();
             });
-        });
-        $('#customer-logout-btn').addEventListener('click', () => signOut(auth));
-    };
-    
-    const handleCustomerNav = (target) => {
-        $$('#customer-main-page .nav-btn').forEach(b => b.classList.remove('active'));
-        $(`button[data-target='${target}']`).classList.add('active');
-        if(target === 'customer-dashboard') renderCustomerDashboard();
-    };
+        };
 
-    const renderCustomerDashboard = () => {
-        $('#customer-content').innerHTML = `
-            <header class="bg-green-600 text-white p-4">
-                <h1 class="text-xl font-bold">Welcome, ${userData.name}</h1>
-                <p class="text-sm text-green-200">Your Ledgers</p>
-            </header>
-            <div class="p-4">
-                <div id="shop-list" class="space-y-3"></div>
-            </div>
-            <div class="fixed bottom-20 right-4">
-                <button id="add-credit-btn" class="bg-green-600 text-white rounded-full p-4 shadow-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                </button>
-            </div>
-        `;
+        const renderOnboarding = () => {
+            $('#onboarding-page').innerHTML = `
+                <div class="text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-indigo-600 mb-4"><path d="M2 6h4"/><path d="M2 10h4"/><path d="M2 14h4"/><path d="M2 18h4"/><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M15 2v20"/><path d="M15 7h5"/><path d="M15 12h5"/><path d="M15 17h5"/></svg>
+                    <h1 class="text-3xl font-bold text-gray-800">Welcome to KiranaCredit</h1>
+                    <p class="text-gray-600 mt-2 mb-8">The smart ledger for India's MSMEs.</p>
+                </div>
+                <div class="w-full">
+                    <h2 class="text-lg font-semibold text-center mb-4">Choose your role to begin:</h2>
+                    <div class="space-y-4">
+                        <button id="select-shopkeeper-btn" class="w-full text-left flex items-center gap-4 p-4 border border-gray-300 rounded-lg hover:bg-indigo-50 hover:border-indigo-500 transition-all">
+                            <div class="p-3 bg-indigo-100 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-store text-indigo-600"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg></div>
+                            <div><p class="font-bold text-lg">I am a Shopkeeper</p><p class="text-sm text-gray-500">Manage your customer ledgers.</p></div>
+                        </button>
+                        <button id="select-customer-btn" class="w-full text-left flex items-center gap-4 p-4 border border-gray-300 rounded-lg hover:bg-green-50 hover:border-green-500 transition-all">
+                            <div class="p-3 bg-green-100 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user text-green-600"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+                            <div><p class="font-bold text-lg">I am a Customer</p><p class="text-sm text-gray-500">Add credit to your local shop.</p></div>
+                        </button>
+                    </div>
+                </div>`;
+            showPage('onboarding-page');
+            $('#select-shopkeeper-btn')?.addEventListener('click', () => renderRegistrationForm('shopkeeper'));
+            $('#select-customer-btn')?.addEventListener('click', () => renderRegistrationForm('customer'));
+        };
 
-        $('#add-credit-btn').addEventListener('click', () => {
-            showModal(`...Add credit modal HTML...`);
-            // Add form submission logic inside modal
-        });
+        const renderRegistrationForm = (role) => {
+            const isShopkeeper = role === 'shopkeeper';
+            $('#onboarding-page').innerHTML = `
+                <div class="w-full">
+                    <button id="back-to-onboarding" class="mb-6 text-indigo-600 font-semibold flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+                        Back
+                    </button>
+                    <h2 class="text-2xl font-bold mb-2">${isShopkeeper ? 'Shopkeeper Registration' : 'Customer Registration'}</h2>
+                    <p class="text-gray-600 mb-8">${isShopkeeper ? 'Create your shop profile to start.' : 'Create your profile to manage credit.'}</p>
+                    <form id="registration-form" class="space-y-4">
+                        <div>
+                            <label for="reg-name" class="block text-sm font-medium text-gray-700 mb-1">Your Full Name ${isShopkeeper ? ' (or Shop Name)' : ''}</label>
+                            <input type="text" id="reg-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label for="reg-phone" class="block text-sm font-medium text-gray-700 mb-1">Your 10-digit Phone Number</label>
+                            <input type="tel" id="reg-phone" required pattern="\\d{10}" title="Please enter a 10-digit phone number" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <p class="text-xs text-gray-500 mt-1">This will be your unique ID.</p>
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 !mt-6">Complete Registration</button>
+                    </form>
+                </div>`;
+            $('#back-to-onboarding').addEventListener('click', renderOnboarding);
+            $('#registration-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = $('#reg-name').value.trim();
+                const phone = $('#reg-phone').value.trim();
+                if (!name || !/^\d{10}$/.test(phone)) {
+                    showToast("Please enter a valid name and 10-digit phone number.", "error");
+                    return;
+                }
+                const userRef = doc(db, "users", currentUser.uid);
+                await setDoc(userRef, { name, phone, role, createdAt: serverTimestamp() });
+                userData = { name, phone, role };
+                if (role === 'shopkeeper') renderShopkeeperShell();
+                else renderCustomerShell();
+            });
+        };
+
+        const renderShopkeeperShell = () => {
+            showPage('shopkeeper-main-page');
+            handleShopkeeperNav('shopkeeper-dashboard');
+            $$('#shopkeeper-main-page .nav-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const target = e.currentTarget.dataset.target;
+                    if(target) handleShopkeeperNav(target);
+                });
+            });
+            $('#logout-btn').addEventListener('click', () => signOut(auth));
+        };
+
+        const handleShopkeeperNav = (target) => {
+            $$('#shopkeeper-main-page .nav-btn').forEach(b => b.classList.remove('active'));
+            $(`button[data-target='${target}']`)?.classList.add('active');
+            if(target === 'shopkeeper-dashboard') renderShopkeeperDashboard();
+            if(target === 'shopkeeper-analytics') renderShopkeeperAnalytics();
+        };
+
+        const renderShopkeeperDashboard = () => {
+            $('#shopkeeper-content').innerHTML = `
+                <header class="bg-indigo-600 text-white p-4 sticky top-0 z-10 shadow-md">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h1 class="text-xl font-bold">${userData.name}</h1>
+                            <p class="text-sm text-indigo-200">Shopkeeper Dashboard</p>
+                        </div>
+                        <button id="show-qr-btn" class="p-2 rounded-full bg-indigo-500 hover:bg-indigo-400 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h.01"/><path d="M21 12h.01"/><path d="M12 21h.01"/></svg>
+                        </button>
+                    </div>
+                </header>
+                <div class="p-4 bg-gray-100">
+                    <div id="summary-cards" class="grid grid-cols-2 gap-4 mb-4"></div>
+                    <input type="text" id="search-bar" placeholder="Search customer by name or phone..." class="w-full px-4 py-2 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <div id="customer-list" class="space-y-3"></div>
+                </div>`;
+
+            $('#show-qr-btn').addEventListener('click', () => {
+                const shopId = currentUser.uid;
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent('kiranacredit:shopid=' + shopId)}`;
+                showModal(`
+                    <div class="modal-backdrop fixed inset-0 bg-black bg-opacity-50 opacity-0 transition-opacity modal-close-btn"></div>
+                    <div class="modal-content fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white p-6 rounded-t-2xl shadow-lg opacity-0 transform translate-y-full transition-all">
+                        <h3 class="text-lg font-bold text-center mb-2">My Shop QR Code</h3>
+                        <p class="text-center text-gray-600 text-sm mb-4">Customers can scan this to add credit to their account.</p>
+                        <img src="${qrUrl}" alt="Shop QR Code" class="mx-auto w-64 h-64 rounded-lg border">
+                        <p class="text-center text-gray-800 font-mono mt-4 break-all text-xs">${shopId}</p>
+                        <button class="modal-close-btn w-full mt-6 bg-gray-200 text-gray-800 font-bold py-3 rounded-lg">Close</button>
+                    </div>`);
+            });
+
+            const q = query(collection(db, `users/${currentUser.uid}/customers`), orderBy("lastActivity", "desc"));
+            const unsub = onSnapshot(q, (snapshot) => {
+                let customers = [];
+                snapshot.forEach(doc => customers.push({ id: doc.id, ...doc.data() }));
+                
+                const renderList = (filteredCustomers) => {
+                    const totalDue = filteredCustomers.reduce((sum, c) => sum + (c.totalDue || 0), 0);
+                    $('#summary-cards').innerHTML = `
+                        <div class="bg-white p-4 rounded-lg shadow"><p class="text-sm text-gray-500">Total Outstanding</p><p class="text-2xl font-bold text-red-600">${formatCurrency(totalDue)}</p></div>
+                        <div class="bg-white p-4 rounded-lg shadow"><p class="text-sm text-gray-500">Active Customers</p><p class="text-2xl font-bold">${filteredCustomers.length}</p></div>`;
+
+                    const listEl = $('#customer-list');
+                    if (filteredCustomers.length === 0) {
+                        listEl.innerHTML = `<div class="text-center py-10 text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-2 text-gray-400"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><p>No customers yet.</p><p class="text-sm">Share your QR code to get started.</p></div>`;
+                        return;
+                    }
+                    listEl.innerHTML = filteredCustomers.map(c => `
+                        <div class="customer-card flex items-center justify-between p-4 bg-white rounded-lg shadow-sm hover:shadow-md cursor-pointer transition-shadow" data-id="${c.id}" data-name="${c.name}" data-phone="${c.phone}">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-lg">${c.name.charAt(0).toUpperCase()}</div>
+                                <div><p class="font-bold">${c.name}</p><p class="text-sm text-gray-500">...${c.phone.slice(-4)} &bull; ${timeAgo(c.lastActivity)}</p></div>
+                            </div>
+                            <div><p class="font-bold text-lg text-right ${c.totalDue > 0 ? 'text-red-600' : 'text-green-600'}">${formatCurrency(c.totalDue)}</p></div>
+                        </div>`).join('');
+
+                    $$('.customer-card').forEach(card => card.addEventListener('click', (e) => {
+                        const { id, name, phone } = e.currentTarget.dataset;
+                        renderLedgerDetail('shopkeeper', id, name, phone);
+                    }));
+                };
+
+                renderList(customers);
+
+                $('#search-bar').addEventListener('keyup', (e) => {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const filtered = customers.filter(c => c.name.toLowerCase().includes(searchTerm) || c.phone.includes(searchTerm));
+                    renderList(filtered);
+                });
+            });
+            unsubscribeListeners.push(unsub);
+        };
         
-        // Query for shops where this user is a customer
-        const q = query(collection(db, "users"), where("role", "==", "shopkeeper"));
-        const unsub = onSnapshot(q, async (snapshot) => {
-            // ... Logic to find and display shops ...
-        });
-        unsubscribeListeners.push(unsub);
-    };
-    
-    // --- Other rendering functions (Analytics, LedgerDetail, etc.) ---
-    const renderShopkeeperAnalytics = () => { /* ... Analytics HTML and Chart.js logic ... */ };
-    const renderLedgerDetail = (role, id, name) => { /* ... Ledger detail HTML and logic ... */ };
+        const renderShopkeeperAnalytics = () => {
+             $('#shopkeeper-content').innerHTML = `
+                <header class="bg-indigo-600 text-white p-4 sticky top-0 z-10 shadow-md">
+                    <h1 class="text-xl font-bold">Analytics</h1>
+                </header>
+                <div class="p-4 space-y-6">
+                    <div class="bg-white p-4 rounded-lg shadow">
+                        <h2 class="text-lg font-semibold mb-2">Credit vs Settlement (Last 30 Days)</h2>
+                        <canvas id="analytics-chart"></canvas>
+                    </div>
+                    <div id="top-customers-card" class="bg-white p-4 rounded-lg shadow"></div>
+                </div>`;
+                
+            const q = query(collection(db, `users/${currentUser.uid}/transactions`), orderBy("timestamp", "desc"));
+            const unsub = onSnapshot(q, (snapshot) => {
+                let transactions = [];
+                snapshot.forEach(doc => transactions.push(doc.data()));
+                
+                // Chart.js Logic
+                const labels = [...Array(30).keys()].map(i => dayjs().subtract(i, 'day').format('D MMM')).reverse();
+                let creditData = Array(30).fill(0);
+                let settlementData = Array(30).fill(0);
 
+                transactions.forEach(t => {
+                    const diff = dayjs().diff(dayjs(t.timestamp.toDate()), 'day');
+                    if (diff < 30) {
+                        if (t.type === 'credit') creditData[29 - diff] += t.amount;
+                        else settlementData[29 - diff] += t.amount;
+                    }
+                });
+                
+                if (myChart) myChart.destroy();
+                const ctx = $('#analytics-chart').getContext('2d');
+                myChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Credit Given',
+                            data: creditData,
+                            backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                            borderColor: 'rgba(239, 68, 68, 1)',
+                            borderWidth: 1
+                        }, {
+                            label: 'Settlements',
+                            data: settlementData,
+                            backgroundColor: 'rgba(22, 163, 74, 0.6)',
+                            borderColor: 'rgba(22, 163, 74, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: { scales: { y: { beginAtZero: true } } }
+                });
 
-    // --- Start the App ---
-    init();
-</script>
+                // Top Customers Logic
+                const customerDues = {};
+                transactions.forEach(t => {
+                    if (!customerDues[t.customerId]) {
+                        customerDues[t.customerId] = { name: t.customerName, due: 0 };
+                    }
+                    customerDues[t.customerId].due += (t.type === 'credit' ? t.amount : -t.amount);
+                });
+
+                const sortedCustomers = Object.values(customerDues).sort((a, b) => b.due - a.due).slice(0, 5);
+                $('#top-customers-card').innerHTML = `
+                    <h2 class="text-lg font-semibold mb-2">Top 5 Customers by Dues</h2>
+                    <ul class="divide-y divide-gray-200">
+                        ${sortedCustomers.map(c => `<li class="py-2 flex justify-between items-center"><span class="font-medium">${c.name}</span><span class="font-bold text-red-600">${formatCurrency(c.due)}</span></li>`).join('')}
+                    </ul>`;
+            });
+            unsubscribeListeners.push(unsub);
+        };
+        
+        const renderLedgerDetail = (role, id, name, phone) => {
+            const isShopkeeper = role === 'shopkeeper';
+            const backFn = isShopkeeper ? renderShopkeeperDashboard : renderCustomerDashboard;
+            
+            $('#detail-page').innerHTML = `
+                <header class="bg-white p-4 sticky top-0 z-10 shadow-sm border-b">
+                    <div class="flex items-center gap-4">
+                        <button id="back-btn" class="text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg></button>
+                        <div>
+                            <h1 class="text-xl font-bold">${name}</h1>
+                            <p class="text-sm text-gray-500">${isShopkeeper ? phone : 'Your Ledger'}</p>
+                        </div>
+                    </div>
+                </header>
+                <div id="ledger-summary" class="p-4 bg-gray-50"></div>
+                <div class="p-4"><h2 class="text-lg font-semibold mb-2">Transaction History</h2><div id="transaction-list" class="space-y-3"></div></div>
+                ${isShopkeeper ? `
+                <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white p-3 border-t grid grid-cols-2 gap-3">
+                    <button id="settle-btn" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg">Settle</button>
+                    <button id="reminder-btn" class="w-full bg-yellow-500 text-white font-bold py-3 rounded-lg">Reminder</button>
+                </div>` : ''}`;
+                
+            showPage('detail-page');
+            $('#back-btn').addEventListener('click', backFn);
+
+            const transactionQuery = query(collection(db, `users/${isShopkeeper ? currentUser.uid : id}/transactions`), where("customerId", "==", isShopkeeper ? id : currentUser.uid), orderBy("timestamp", "desc"));
+            const unsub = onSnapshot(transactionQuery, (snapshot) => {
+                let transactions = [];
+                let totalDue = 0;
+                snapshot.forEach(doc => {
+                    const t = doc.data();
+                    transactions.push(t);
+                    totalDue += (t.type === 'credit' ? t.amount : -t.amount);
+                });
+
+                $('#ledger-summary').innerHTML = `<div class="bg-white p-4 rounded-lg shadow text-center"><p class="text-sm text-gray-500">Current Balance</p><p class="text-3xl font-bold ${totalDue > 0 ? 'text-red-600' : 'text-green-600'}">${formatCurrency(totalDue)}</p></div>`;
+
+                const listEl = $('#transaction-list');
+                 if (transactions.length === 0) {
+                    listEl.innerHTML = `<p class="text-center py-4 text-gray-500">No transactions yet.</p>`;
+                    return;
+                }
+                listEl.innerHTML = transactions.map(t => `
+                    <div class="flex justify-between items-center p-3 bg-white rounded-lg border">
+                        <div>
+                            <p class="font-semibold capitalize">${t.type} ${t.note ? `(${t.note})` : ''}</p>
+                            <p class="text-xs text-gray-500">${formatDate(t.timestamp)}</p>
+                        </div>
+                        <p class="font-bold text-lg ${t.type === 'credit' ? 'text-red-600' : 'text-green-600'}">${t.type === 'credit' ? '+' : '-'}${formatCurrency(t.amount)}</p>
+                    </div>`).join('');
+            });
+            unsubscribeListeners.push(unsub);
+
+            if(isShopkeeper) {
+                $('#settle-btn').addEventListener('click', () => { /* ... Settle modal logic ... */ });
+                $('#reminder-btn').addEventListener('click', () => { /* ... Reminder logic ... */ });
+            }
+        };
+        
+        const renderCustomerShell = () => {
+             showPage('customer-main-page');
+             handleCustomerNav('customer-dashboard');
+             $$('#customer-main-page .nav-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const target = e.currentTarget.dataset.target;
+                    if(target) handleCustomerNav(target);
+                });
+             });
+             $('#customer-logout-btn').addEventListener('click', () => signOut(auth));
+        };
+        
+        const handleCustomerNav = (target) => {
+             $$('#customer-main-page .nav-btn').forEach(b => b.classList.remove('active'));
+             $(`button[data-target='${target}']`)?.classList.add('active');
+             if(target === 'customer-dashboard') renderCustomerDashboard();
+        };
+        
+        const renderCustomerDashboard = () => {
+             $('#customer-content').innerHTML = `
+                <header class="bg-green-600 text-white p-4 sticky top-0 z-10 shadow-md">
+                    <h1 class="text-xl font-bold">Welcome, ${userData.name}</h1>
+                    <p class="text-sm text-green-200">Your Ledgers with Shops</p>
+                </header>
+                <div class="p-4">
+                    <div id="shop-list" class="space-y-3"></div>
+                </div>
+                <div class="fixed bottom-24 right-4 z-20">
+                    <button id="add-credit-btn" class="bg-green-600 text-white rounded-full p-4 shadow-lg hover:bg-green-700 transition-transform transform hover:scale-110">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                    </button>
+                </div>`;
+            
+            $('#add-credit-btn').addEventListener('click', () => {
+                 showModal(`
+                    <div class="modal-backdrop fixed inset-0 bg-black bg-opacity-50 opacity-0 transition-opacity modal-close-btn"></div>
+                    <div class="modal-content fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white p-6 rounded-t-2xl shadow-lg opacity-0 transform translate-y-full transition-all">
+                        <h3 class="text-lg font-bold mb-4">Add New Credit</h3>
+                        <form id="add-credit-form" class="space-y-4">
+                            <div>
+                                <label for="shop-id" class="text-sm font-medium">Shop's Unique ID</label>
+                                <input type="text" id="shop-id" required class="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="Paste or type the Shop ID">
+                            </div>
+                            <div>
+                                <label for="credit-amount" class="text-sm font-medium">Amount (₹)</label>
+                                <input type="number" id="credit-amount" required min="1" class="w-full mt-1 px-3 py-2 border rounded-lg">
+                            </div>
+                            <div>
+                                <label for="credit-note" class="text-sm font-medium">Note (Optional)</label>
+                                <input type="text" id="credit-note" class="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="e.g., Groceries, Milk">
+                            </div>
+                            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg !mt-6">Add Credit</button>
+                        </form>
+                    </div>`);
+                
+                $('#add-credit-form').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const shopId = $('#shop-id').value.trim();
+                    const amount = parseFloat($('#credit-amount').value);
+                    const note = $('#credit-note').value.trim();
+                    
+                    if (!shopId || !amount || amount <= 0) {
+                        showToast("Please enter a valid Shop ID and amount.", "error"); return;
+                    }
+
+                    // Transaction logic here...
+                    const shopRef = doc(db, 'users', shopId);
+                    const shopDoc = await getDoc(shopRef);
+                    if(!shopDoc.exists() || shopDoc.data().role !== 'shopkeeper') {
+                         showToast("Invalid Shop ID. Please check and try again.", "error"); return;
+                    }
+                    
+                    const batch = writeBatch(db);
+                    
+                    // Add transaction
+                    const transRef = collection(db, `users/${shopId}/transactions`);
+                    batch.set(doc(transRef), {
+                        amount, note, type: 'credit', timestamp: serverTimestamp(),
+                        customerId: currentUser.uid, customerName: userData.name, customerPhone: userData.phone
+                    });
+                    
+                    // Create or update customer record for shopkeeper
+                    const customerRef = doc(db, `users/${shopId}/customers`, currentUser.uid);
+                    batch.set(customerRef, {
+                        name: userData.name, phone: userData.phone,
+                        totalDue: increment(amount), lastActivity: serverTimestamp()
+                    }, { merge: true });
+                    
+                    await batch.commit();
+                    showToast("Credit added successfully!", "success");
+                    hideModal();
+                });
+            });
+
+            // Query to find all shops where this user is a customer
+            const allShopsQuery = query(collection(db, "users"), where("role", "==", "shopkeeper"));
+            const unsub = onSnapshot(allShopsQuery, async (shopsSnapshot) => {
+                 let myShops = [];
+                 for (const shopDoc of shopsSnapshot.docs) {
+                    const customerRef = doc(db, `users/${shopDoc.id}/customers`, currentUser.uid);
+                    const customerDoc = await getDoc(customerRef);
+                    if(customerDoc.exists()){
+                        myShops.push({ id: shopDoc.id, ...shopDoc.data(), dueInfo: customerDoc.data() });
+                    }
+                 }
+                 
+                 const listEl = $('#shop-list');
+                 if(myShops.length === 0) {
+                    listEl.innerHTML = `<div class="text-center py-10 text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-2 text-gray-400"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><p>You have no credit with any shop.</p><p class="text-sm">Click the '+' button to add credit.</p></div>`;
+                    return;
+                 }
+                 
+                 listEl.innerHTML = myShops.map(s => `
+                    <div class="shop-card flex items-center justify-between p-4 bg-white rounded-lg shadow-sm hover:shadow-md cursor-pointer transition-shadow" data-id="${s.id}" data-name="${s.name}" data-phone="${s.phone}">
+                        <div class="flex items-center gap-3">
+                             <div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-lg">${s.name.charAt(0).toUpperCase()}</div>
+                             <div><p class="font-bold">${s.name}</p><p class="text-sm text-gray-500">Last activity: ${timeAgo(s.dueInfo.lastActivity)}</p></div>
+                        </div>
+                        <div><p class="font-bold text-lg text-right ${s.dueInfo.totalDue > 0 ? 'text-red-600' : 'text-green-600'}">${formatCurrency(s.dueInfo.totalDue)}</p></div>
+                    </div>`).join('');
+                
+                 $$('.shop-card').forEach(card => card.addEventListener('click', e => {
+                    const {id, name, phone} = e.currentTarget.dataset;
+                    renderLedgerDetail('customer', id, name, phone);
+                 }));
+            });
+            unsubscribeListeners.push(unsub);
+        };
+
+        init();
+    </script>
+</body>
+</html>
+
