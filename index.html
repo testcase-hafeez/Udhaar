@@ -157,6 +157,7 @@
 
         const init = () => {
             dayjs.extend(dayjs_plugin_relativeTime);
+            setupOnboardingListeners(); // <-- FIX: Set up listeners once
             $('#loading-screen').style.display = 'flex';
             onAuthStateChanged(auth, async (user) => {
                 unsubscribeListeners.forEach(unsub => unsub());
@@ -182,6 +183,23 @@
                 if (e.target.matches('.modal-close-btn')) hideModal();
             });
         };
+        
+        // --- FIX: Central event handler for the onboarding page ---
+        const setupOnboardingListeners = () => {
+            $('#onboarding-page').addEventListener('click', e => {
+                const button = e.target.closest('button');
+                if (!button) return;
+
+                const buttonId = button.id;
+                if (buttonId === 'select-shopkeeper-btn') {
+                    renderRegistrationForm('shopkeeper');
+                } else if (buttonId === 'select-customer-btn') {
+                    renderRegistrationForm('customer');
+                } else if (buttonId === 'back-to-onboarding') {
+                    renderOnboarding();
+                }
+            });
+        };
 
         const renderOnboarding = () => {
             $('#onboarding-page').innerHTML = `
@@ -204,8 +222,6 @@
                     </div>
                 </div>`;
             showPage('onboarding-page');
-            $('#select-shopkeeper-btn')?.addEventListener('click', () => renderRegistrationForm('shopkeeper'));
-            $('#select-customer-btn')?.addEventListener('click', () => renderRegistrationForm('customer'));
         };
 
         const renderRegistrationForm = (role) => {
@@ -231,7 +247,7 @@
                         <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-indigo-700 transition-transform transform hover:scale-105 !mt-6">Complete Registration</button>
                     </form>
                 </div>`;
-            $('#back-to-onboarding').addEventListener('click', renderOnboarding);
+            
             $('#registration-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const name = $('#reg-name').value.trim();
