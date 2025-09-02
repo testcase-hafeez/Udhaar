@@ -14,9 +14,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Chart.js for Analytics -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/relativeTime.js" defer></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -115,8 +115,7 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        dayjs.extend(dayjs_plugin_relativeTime);
-
+        
         let currentUser = null;
         let userData = null;
         let unsubscribeListeners = [];
@@ -157,6 +156,7 @@
         };
 
         const init = () => {
+            dayjs.extend(dayjs_plugin_relativeTime);
             $('#loading-screen').style.display = 'flex';
             onAuthStateChanged(auth, async (user) => {
                 unsubscribeListeners.forEach(unsub => unsub());
@@ -280,7 +280,7 @@
                         </button>
                     </div>
                 </header>
-                <div class="p-4 bg-gray-100">
+                <div class="p-4 bg-gray-100 min-h-screen">
                     <div id="summary-cards" class="grid grid-cols-2 gap-4 mb-4"></div>
                     <input type="text" id="search-bar" placeholder="Search customer by name or phone..." class="w-full px-4 py-2 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <div id="customer-list" class="space-y-3"></div>
@@ -347,7 +347,7 @@
                 <header class="bg-indigo-600 text-white p-4 sticky top-0 z-10 shadow-md">
                     <h1 class="text-xl font-bold">Analytics</h1>
                 </header>
-                <div class="p-4 space-y-6">
+                <div class="p-4 space-y-6 min-h-screen">
                     <div class="bg-white p-4 rounded-lg shadow">
                         <h2 class="text-lg font-semibold mb-2">Credit vs Settlement (Last 30 Days)</h2>
                         <canvas id="analytics-chart"></canvas>
@@ -360,12 +360,12 @@
                 let transactions = [];
                 snapshot.forEach(doc => transactions.push(doc.data()));
                 
-                // Chart.js Logic
                 const labels = [...Array(30).keys()].map(i => dayjs().subtract(i, 'day').format('D MMM')).reverse();
                 let creditData = Array(30).fill(0);
                 let settlementData = Array(30).fill(0);
 
                 transactions.forEach(t => {
+                    if(!t.timestamp) return;
                     const diff = dayjs().diff(dayjs(t.timestamp.toDate()), 'day');
                     if (diff < 30) {
                         if (t.type === 'credit') creditData[29 - diff] += t.amount;
@@ -374,68 +374,60 @@
                 });
                 
                 if (myChart) myChart.destroy();
-                const ctx = $('#analytics-chart').getContext('2d');
+                const ctx = $('#analytics-chart')?.getContext('2d');
+                if(!ctx) return;
                 myChart = new Chart(ctx, {
                     type: 'bar',
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'Credit Given',
-                            data: creditData,
-                            backgroundColor: 'rgba(239, 68, 68, 0.6)',
-                            borderColor: 'rgba(239, 68, 68, 1)',
-                            borderWidth: 1
+                            label: 'Credit Given', data: creditData, backgroundColor: 'rgba(239, 68, 68, 0.6)'
                         }, {
-                            label: 'Settlements',
-                            data: settlementData,
-                            backgroundColor: 'rgba(22, 163, 74, 0.6)',
-                            borderColor: 'rgba(22, 163, 74, 1)',
-                            borderWidth: 1
+                            label: 'Settlements', data: settlementData, backgroundColor: 'rgba(22, 163, 74, 0.6)'
                         }]
                     },
                     options: { scales: { y: { beginAtZero: true } } }
                 });
 
-                // Top Customers Logic
                 const customerDues = {};
                 transactions.forEach(t => {
-                    if (!customerDues[t.customerId]) {
-                        customerDues[t.customerId] = { name: t.customerName, due: 0 };
-                    }
+                    if (!customerDues[t.customerId]) customerDues[t.customerId] = { name: t.customerName, due: 0 };
                     customerDues[t.customerId].due += (t.type === 'credit' ? t.amount : -t.amount);
                 });
 
-                const sortedCustomers = Object.values(customerDues).sort((a, b) => b.due - a.due).slice(0, 5);
+                const sortedCustomers = Object.values(customerDues).filter(c=>c.due > 0).sort((a, b) => b.due - a.due).slice(0, 5);
                 $('#top-customers-card').innerHTML = `
                     <h2 class="text-lg font-semibold mb-2">Top 5 Customers by Dues</h2>
-                    <ul class="divide-y divide-gray-200">
+                    ${sortedCustomers.length > 0 ? `<ul class="divide-y divide-gray-200">
                         ${sortedCustomers.map(c => `<li class="py-2 flex justify-between items-center"><span class="font-medium">${c.name}</span><span class="font-bold text-red-600">${formatCurrency(c.due)}</span></li>`).join('')}
-                    </ul>`;
+                    </ul>` : `<p class="text-gray-500">No outstanding dues found.</p>`}`;
             });
             unsubscribeListeners.push(unsub);
         };
         
         const renderLedgerDetail = (role, id, name, phone) => {
             const isShopkeeper = role === 'shopkeeper';
-            const backFn = isShopkeeper ? renderShopkeeperDashboard : renderCustomerDashboard;
+            const backFn = isShopkeeper ? renderShopkeeperShell : renderCustomerShell;
             
             $('#detail-page').innerHTML = `
-                <header class="bg-white p-4 sticky top-0 z-10 shadow-sm border-b">
-                    <div class="flex items-center gap-4">
-                        <button id="back-btn" class="text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg></button>
-                        <div>
-                            <h1 class="text-xl font-bold">${name}</h1>
-                            <p class="text-sm text-gray-500">${isShopkeeper ? phone : 'Your Ledger'}</p>
+                <div class="flex flex-col h-screen">
+                    <header class="bg-white p-4 sticky top-0 z-10 shadow-sm border-b">
+                        <div class="flex items-center gap-4">
+                            <button id="back-btn" class="text-gray-600"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg></button>
+                            <div>
+                                <h1 class="text-xl font-bold">${name}</h1>
+                                <p class="text-sm text-gray-500">${isShopkeeper ? phone : 'Your Ledger'}</p>
+                            </div>
                         </div>
-                    </div>
-                </header>
-                <div id="ledger-summary" class="p-4 bg-gray-50"></div>
-                <div class="p-4"><h2 class="text-lg font-semibold mb-2">Transaction History</h2><div id="transaction-list" class="space-y-3"></div></div>
-                ${isShopkeeper ? `
-                <div class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white p-3 border-t grid grid-cols-2 gap-3">
-                    <button id="settle-btn" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg">Settle</button>
-                    <button id="reminder-btn" class="w-full bg-yellow-500 text-white font-bold py-3 rounded-lg">Reminder</button>
-                </div>` : ''}`;
+                    </header>
+                    <div id="ledger-summary" class="p-4 bg-gray-50"></div>
+                    <div class="p-4 flex-1 overflow-y-auto custom-scrollbar"><h2 class="text-lg font-semibold mb-2">Transaction History</h2><div id="transaction-list" class="space-y-3"></div></div>
+                    ${isShopkeeper ? `
+                    <div class="bg-white p-3 border-t grid grid-cols-2 gap-3">
+                        <button id="settle-btn" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M11.5 22.35q-1.95-.2-3.6-1.1q-1.65-.9-2.925-2.175T2.8 16.15q-.9-1.65-1.1-3.6Q1.5 10.6 1.5 9V3l10.5 5.25L22.5 3v6q0 1.6-.2 3.55q-.2 1.95-1.1 3.6q-.9 1.65-2.175 2.925T16.1 21.25q-1.65.9-3.6 1.1q-1.95.2-3 .2Zm.5-2.7q1.05 0 2.1-.2q1.05-.2 1.95-.55q.9-.35 1.7-1q.8-.65 1.35-1.4t.8-1.75q.25-1 .35-2.05q.1-1.05.1-2.1V4.8L12 7.8L3 4.8v4.2q0 1.05.1 2.1q.1 1.05.35 2.05q.25 1 .8 1.75t1.35 1.4q.8.65 1.7 1q.9.35 1.95.55q1.05.2 2.1.2Zm-1.6-4.95l5.05-5.05l-1.05-1.05l-4 4l-2.15-2.15l-1.05 1.05l3.2 3.2Z"/></svg> Settle</button>
+                        <button id="reminder-btn" class="w-full bg-yellow-500 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M22 14v-2h-1.17a3.493 3.493 0 0 0-.41-1.37l.69-.69l-1.42-1.42l-.69.69a3.493 3.493 0 0 0-1.37-.41V8h-2v1.17c-.48.12-.94.3-1.37.54l-.69-.69l-1.42 1.42l.69.69c-.24.43-.42.89-.54 1.37H10v2h1.17c.12.48.3.94.54 1.37l-.69.69l1.42 1.42l.69-.69c.43.24.89.42 1.37.54V18h2v-1.17c.48-.12.94-.3 1.37-.54l.69.69l1.42-1.42l-.69-.69c.24-.43.42-.89.54-1.37H22ZM16 14a2 2 0 1 1 0-4a2 2 0 0 1 0 4ZM8.13 8.08L6.08 6.03L2 10.11V18h8v-3.53l-1.87-1.86Z"/></svg> Reminder</button>
+                    </div>` : ''}
+                </div>`;
                 
             showPage('detail-page');
             $('#back-btn').addEventListener('click', backFn);
@@ -469,8 +461,8 @@
             unsubscribeListeners.push(unsub);
 
             if(isShopkeeper) {
-                $('#settle-btn').addEventListener('click', () => { /* ... Settle modal logic ... */ });
-                $('#reminder-btn').addEventListener('click', () => { /* ... Reminder logic ... */ });
+                $('#settle-btn').addEventListener('click', () => { /* Settle modal logic */ });
+                $('#reminder-btn').addEventListener('click', () => { /* Reminder logic */ });
             }
         };
         
@@ -498,7 +490,7 @@
                     <h1 class="text-xl font-bold">Welcome, ${userData.name}</h1>
                     <p class="text-sm text-green-200">Your Ledgers with Shops</p>
                 </header>
-                <div class="p-4">
+                <div class="p-4 min-h-screen">
                     <div id="shop-list" class="space-y-3"></div>
                 </div>
                 <div class="fixed bottom-24 right-4 z-20">
@@ -534,41 +526,27 @@
                     const shopId = $('#shop-id').value.trim();
                     const amount = parseFloat($('#credit-amount').value);
                     const note = $('#credit-note').value.trim();
-                    
-                    if (!shopId || !amount || amount <= 0) {
-                        showToast("Please enter a valid Shop ID and amount.", "error"); return;
-                    }
-
-                    // Transaction logic here...
+                    if (!shopId || !amount || amount <= 0) { showToast("Please enter a valid Shop ID and amount.", "error"); return; }
                     const shopRef = doc(db, 'users', shopId);
                     const shopDoc = await getDoc(shopRef);
-                    if(!shopDoc.exists() || shopDoc.data().role !== 'shopkeeper') {
-                         showToast("Invalid Shop ID. Please check and try again.", "error"); return;
-                    }
-                    
+                    if(!shopDoc.exists() || shopDoc.data().role !== 'shopkeeper') { showToast("Invalid Shop ID. Please check and try again.", "error"); return; }
                     const batch = writeBatch(db);
-                    
-                    // Add transaction
                     const transRef = collection(db, `users/${shopId}/transactions`);
                     batch.set(doc(transRef), {
                         amount, note, type: 'credit', timestamp: serverTimestamp(),
                         customerId: currentUser.uid, customerName: userData.name, customerPhone: userData.phone
                     });
-                    
-                    // Create or update customer record for shopkeeper
                     const customerRef = doc(db, `users/${shopId}/customers`, currentUser.uid);
                     batch.set(customerRef, {
                         name: userData.name, phone: userData.phone,
                         totalDue: increment(amount), lastActivity: serverTimestamp()
                     }, { merge: true });
-                    
                     await batch.commit();
                     showToast("Credit added successfully!", "success");
                     hideModal();
                 });
             });
 
-            // Query to find all shops where this user is a customer
             const allShopsQuery = query(collection(db, "users"), where("role", "==", "shopkeeper"));
             const unsub = onSnapshot(allShopsQuery, async (shopsSnapshot) => {
                  let myShops = [];
@@ -579,14 +557,12 @@
                         myShops.push({ id: shopDoc.id, ...shopDoc.data(), dueInfo: customerDoc.data() });
                     }
                  }
-                 
                  const listEl = $('#shop-list');
                  if(myShops.length === 0) {
                     listEl.innerHTML = `<div class="text-center py-10 text-gray-500"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-2 text-gray-400"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><p>You have no credit with any shop.</p><p class="text-sm">Click the '+' button to add credit.</p></div>`;
                     return;
                  }
-                 
-                 listEl.innerHTML = myShops.map(s => `
+                 listEl.innerHTML = myShops.sort((a,b) => b.dueInfo.lastActivity.toMillis() - a.dueInfo.lastActivity.toMillis()).map(s => `
                     <div class="shop-card flex items-center justify-between p-4 bg-white rounded-lg shadow-sm hover:shadow-md cursor-pointer transition-shadow" data-id="${s.id}" data-name="${s.name}" data-phone="${s.phone}">
                         <div class="flex items-center gap-3">
                              <div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-lg">${s.name.charAt(0).toUpperCase()}</div>
@@ -602,8 +578,10 @@
             });
             unsubscribeListeners.push(unsub);
         };
+        
+        // This listener ensures that the init() function only runs after the page is fully ready.
+        document.addEventListener('DOMContentLoaded', init);
 
-        init();
     </script>
 </body>
 </html>
